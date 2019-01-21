@@ -6,53 +6,37 @@ import os
 import tensorflow as tf
 from data_cleaning import preprocess_sentence
 
-## defining constants and paths
-news_articles_path = 'data/News/'
-news_summaries_path = 'data/Summaries'
-news_articles = []
-summaries = []
+def preprocess_sentence(w):
+    w = w.lower().strip()
+    
+    # creating a space between a word and the punctuation following it
+    # eg: "he is a boy." => "he is a boy ." 
+    # Reference:- https://stackoverflow.com/questions/3645931/python-padding-punctuation-with-white-spaces-keeping-punctuation
+    w = re.sub(r"([?.!,¿])", r" \1 ", w)
+    w = re.sub(r'[" "]+', " ", w)
+    
+    # replacing everything with space except (a-z, A-Z, ".", "?", "!", ",")
+    w = re.sub(r"[^a-zA-Z?.!,¿]+", " ", w)
+    
+    w = w.rstrip().strip()
+    
+    # adding a start and an end token to the sentence
+    # so that the model know when to start and stop predicting.
+    w = '<start> ' + w + ' <end>'
+    return w
 
-# a function to make all the news articles as a list
-def make_news_article(path):
-    for files_and_dir in os.walk(path):
-        for file in files_and_dir[2]:
-            news = open(files_and_dir[0]+ '/' + file, 'r')
-            news_articles.append(news.read())
-            news.close()
-
-# a function to make all the news summaries as a list
-def make_summaries(path):
-    for files_and_dir in os.walk(path):
-        for file in files_and_dir[2]:
-            summary = open(files_and_dir[0]+ '/' + file, 'r')
-            summaries.append(summary.read())
-            summary.close()
-
-
-make_news_article(news_articles_path)
-make_summaries(news_summaries_path)
-
-#print(news_articles)
-#print(summaries)
-
-# Cleaning the news and summaries
-clean_news = [preprocess_sentence(news) for news in news_articles]
-clean_summaries = [preprocess_sentence(summary) for summary in summaries]
+clean_text = [preprocess_sentence(str(text)) for text in df['Text']]
+clean_summaries = [preprocess_sentence(str(text)) for text in df['Summary']]
 
 # 1. Remove the accents
 # 2. Clean the sentences
 # 3. Return word pairs in the format: [ENGLISH, SPANISH]
 def create_dataset():    
-    word_pairs = [[news, summaries]  for news, summaries in zip(clean_news, clean_summaries)]
-    return word_pairs[:30000]
-	
-pairs = create_dataset()
-df = pd.DataFrame({
-	'news': [news for news, summaries in pairs],
-	'summaries': [summaries for news, summaries in pairs]
-})
+    word_pairs = [[text, summary]  for text, summary in zip(clean_text, clean_summaries)]
+    return word_pairs[:1000]
 
-df.to_csv('dataset_summary.csv')
+pairs = create_dataset()
+pairs[:10]
 
 
 # This class creates a word -> index mapping (e.g,. "dad" -> 5) and vice-versa 
@@ -88,16 +72,16 @@ def load_dataset():
     pairs = create_dataset()
 
     # index language using the class defined above    
-    inp_lang = LanguageIndex(news for news, summary in pairs)
-    targ_lang = LanguageIndex(summary for news, summary in pairs)
+    inp_lang = LanguageIndex(text for text, summary in pairs)
+    targ_lang = LanguageIndex(summary for text, summary in pairs)
     
     # Vectorize the input and target languages
     
     # Spanish sentences
-    input_tensor = [[inp_lang.word2idx[s] for s in news.split(' ')] for news, summary in pairs]
+    input_tensor = [[inp_lang.word2idx[s] for s in text.split(' ')] for text, summary in pairs]
     
     # English sentences
-    target_tensor = [[targ_lang.word2idx[s] for s in summary.split(' ')] for news, summary in pairs]
+    target_tensor = [[targ_lang.word2idx[s] for s in summary.split(' ')] for text, summary in pairs]
     
     # Calculate max_length of input and output tensor
     # Here, we'll set those to the longest sentence in the dataset
